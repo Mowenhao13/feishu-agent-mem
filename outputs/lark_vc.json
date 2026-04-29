@@ -1,0 +1,12 @@
+{
+  "source": "lark_vc",
+  "extracted_at": "2026-04-29T15:37:20.330926+08:00",
+  "raw_data": {
+    "_errors": {
+      "meetings": "lark-cli vc +search --page-all failed: exit status 1, stderr: Error: unknown flag: --page-all\n"
+    }
+  },
+  "formatted": {
+    "extracted": true
+  }
+}

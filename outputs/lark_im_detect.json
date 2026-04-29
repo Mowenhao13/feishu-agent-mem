@@ -1,0 +1,15 @@
+{
+  "has_changes": true,
+  "source": "lark_im",
+  "detected_at": "2026-04-29T15:37:29.16145+08:00",
+  "last_check": "2026-04-29T14:37:27.703991+08:00",
+  "changes": [
+    {
+      "type": "new",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b502ecdee6ca4b4c79c4602ce9ca",
+      "summary": "[群聊] 莫文豪: hi",
+      "timestamp": 1777473660
+    }
+  ]
+}
