@@ -1,0 +1,267 @@
+{
+  "has_changes": true,
+  "source": "lark_im",
+  "detected_at": "2026-05-01T21:57:01.876414+08:00",
+  "last_check": "2026-04-30T21:57:00.183683+08:00",
+  "changes": [
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e0c288ca4b37892eefb353a2",
+      "summary": "[群聊] 莫文豪: 决定：消息队列换成Kafka，执行人吴九，影响级别major",
+      "timestamp": 1777603740
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e752e60a8b39cc3766ebc495",
+      "summary": "[群聊] 莫文豪: LGTM：前端升级Vue3，执行人王五，影响级别critical",
+      "timestamp": 1777603620
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e751ad6f8b2a0a38f7aa9986",
+      "summary": "[群聊] 莫文豪: 确认：数据库迁移到PostgreSQL，执行人李四",
+      "timestamp": 1777603620
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e750168a0b39033d11b7d0aa",
+      "summary": "[群聊] 莫文豪: 决定：认证改用OAuth2，执行人张三，影响级别major",
+      "timestamp": 1777603620
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e685da8a4b4bc17625fa3205",
+      "summary": "[群聊] 莫文豪: 定下来：日志方案采用Loki+Grafana，执行人孙七",
+      "timestamp": 1777603260
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e68b8fd34b3ec622b84d441e",
+      "summary": "[群聊] 莫文豪: approve：前端框架升级React 18，执行人赵六",
+      "timestamp": 1777603260
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e6897dca0b2bc0a633698434",
+      "summary": "[群聊] 莫文豪: 确认：消息队列换用RabbitMQ，执行人王五",
+      "timestamp": 1777603260
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e68f386f8b4a4fc5edf758d4",
+      "summary": "[群聊] 莫文豪: LGTM：订单系统分库分表，执行人李四，confirm通过",
+      "timestamp": 1777603260
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e68efa8a0b3ca8ef6dfcb4d2",
+      "summary": "[群聊] 莫文豪: 决定：用户认证改用OAuth2，执行人张三，影响级别major",
+      "timestamp": 1777603260
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e521734a4b481a889c80cbd1",
+      "summary": "[群聊] 莫文豪: approve：前端组件库使用Ant Design，执行人赵六",
+      "timestamp": 1777603140
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e52721ca0b2bcd20a9393119",
+      "summary": "[群聊] 莫文豪: 确认：缓存方案从Memcached换回Redis，影响级别critical",
+      "timestamp": 1777603140
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e526e60a4b3c289826978c8b",
+      "summary": "[群聊] 莫文豪: 定下来了：日志系统统一用ELK Stack，执行人王五",
+      "timestamp": 1777603140
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e524a1ca8b25d869bfab8c86",
+      "summary": "[群聊] 莫文豪: LGTM：订单接口迁移gRPC，执行人李四，confirm通过",
+      "timestamp": 1777603140
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e52a1f4a0b2c34dbe12c4508",
+      "summary": "[群聊] 莫文豪: 决定：用户服务改用JWT认证，执行人张三，影响级别major",
+      "timestamp": 1777603140
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e5fc5bca0b2d1e7084adb6cf",
+      "summary": "[群聊] 莫文豪: 决定：前端框架迁移到React，执行人周八",
+      "timestamp": 1777602960
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e43b434a8b4c54349603eb3f",
+      "summary": "[群聊] 莫文豪: 决定：消息队列使用Kafka，执行人孙七，影响级别critical",
+      "timestamp": 1777602900
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e470280a0b4ad8228c4e6d19",
+      "summary": "[群聊] 莫文豪: 通过：数据库分库分表方案，执行人赵六",
+      "timestamp": 1777602840
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500e4a6ba8a0b265d662f83c7d7",
+      "summary": "[群聊] 莫文豪: 确认：缓存层使用Redis Cluster方案，影响级别major",
+      "timestamp": 1777602720
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500db19e08a0b24eff05fa261af",
+      "summary": "[群聊] 莫文豪: 确认：订单服务采用gRPC协议，执行人王五",
+      "timestamp": 1777602660
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500db94158a0b24955c54fbf371",
+      "summary": "[群聊] 莫文豪: LGTM，确认采用Go 1.23版本，数据库用MySQL，执行人李四",
+      "timestamp": 1777602540
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500da2bcd0a0c4dc9a5dd2805a5",
+      "summary": "[群聊] 莫文豪: 决定将缓存方案从Redis改为Memcached，approve通过",
+      "timestamp": 1777602360
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d92b4c4a0b2aea44939f1574",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777602060
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d9526b4a0b27e6070a95453d",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777602060
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d97bbfca4b29c2f3d9cfd3d5",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777602060
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d97a77ca4b4aea01a7922c80",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777602060
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d9790e0a4b4c1202770fa118",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777602060
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d979c90a4b4b6c44fe2516c6",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777602060
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d978890a0b2074ad848744f4",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。\n决定了...",
+      "timestamp": 1777602060
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d97ee60a0b3976fa4fcce6d5",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777602060
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d9ae390a0b273fb849189951",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777601940
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d8877a8a0b3264c424a1d705",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777601760
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500df68810a0b4a2a2e355c9d6a",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777601520
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500dfc300ca0b3492c9cbfe5317",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777601400
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500dd8b008a0c3fdb74e61ffcd7",
+      "summary": "[群聊] 莫文豪: 决定了，就用Go实现记忆系统。采用Go 1.22，数据库用PostgreSQL，缓存用Redis。大家确认一下。",
+      "timestamp": 1777600980
+    },
+    {
+      "type": "new_text",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500dce3b98a0b322526b0bbe836",
+      "summary": "[群聊] 莫文豪: hi",
+      "timestamp": 1777600620
+    },
+    {
+      "type": "new_post",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d34c03d30c109b6f2bcee927",
+      "summary": "[群聊] 莫文豪 发送了富文本消息",
+      "timestamp": 1777600500
+    },
+    {
+      "type": "new_post",
+      "entity_type": "group_message",
+      "entity_id": "om_x100b500d3a5180a0c3c24f6ee53d42b",
+      "summary": "[群聊] 莫文豪 发送了富文本消息",
+      "timestamp": 1777600440
+    }
+  ]
+}

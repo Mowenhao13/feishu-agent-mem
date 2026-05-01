@@ -13,15 +13,20 @@ type Config struct {
 	UserID    string
 }
 
-// LoadConfig 从环境变量加载配置
+// LoadConfig 从环境变量加载配置（默认使用 LARK_*）
 func LoadConfig() *Config {
+	return LoadConfigWithPrefix("LARK_")
+}
+
+// LoadConfigWithPrefix 从环境变量加载配置（使用指定前缀）
+func LoadConfigWithPrefix(prefix string) *Config {
 	cfg := &Config{
-		AppID:     os.Getenv("LARK_APP_ID"),
-		AppSecret: os.Getenv("LARK_APP_SECRET"),
+		AppID:     os.Getenv(prefix + "APP_ID"),
+		AppSecret: os.Getenv(prefix + "APP_SECRET"),
 	}
 
-	// 解析 LARK_CHAT_IDS（逗号分隔）
-	if raw := os.Getenv("LARK_CHAT_IDS"); raw != "" {
+	// 解析 CHAT_IDS（逗号分隔）
+	if raw := os.Getenv(prefix + "CHAT_IDS"); raw != "" {
 		for _, id := range strings.Split(raw, ",") {
 			id = strings.TrimSpace(id)
 			if id != "" {
@@ -30,7 +35,7 @@ func LoadConfig() *Config {
 		}
 	}
 
-	cfg.UserID = os.Getenv("LARK_USER_ID")
+	cfg.UserID = os.Getenv(prefix + "USER_ID")
 
 	return cfg
 }
@@ -41,4 +46,9 @@ func (c *Config) FirstChatID() string {
 		return c.ChatIDs[0]
 	}
 	return ""
+}
+
+// IsConfigured 检查配置是否完整（至少有 AppID 和 AppSecret）
+func (c *Config) IsConfigured() bool {
+	return c.AppID != "" && c.AppSecret != ""
 }

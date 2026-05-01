@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
 
 	"feishu-mem/internal/core"
 	"feishu-mem/internal/decision"
+	larkadapter "feishu-mem/internal/lark-adapter"
 	"feishu-mem/internal/llm"
 	"feishu-mem/internal/mcp"
 )
@@ -511,3 +514,108 @@ func Test_12_RealLLM_EndToEnd(t *testing.T) {
 
 	t.Log("\n✓ 真实 LLM 端到端完整流程测试完成！")
 }
+
+// Test_13_MCPToLarkPush 测试 MCP-server 给飞书客户端推送消息
+func Test_13_MCPToLarkPush(t *testing.T) {
+	t.Log("=== 测试13: MCP-server 给飞书客户端推送消息 ===")
+
+	// 加载 .env 文件
+	_ = godotenv.Load("../../.env")
+
+	// 检查 CLAW_* 配置
+	cfg := larkadapter.LoadConfigWithPrefix("CLAW_")
+	if !cfg.IsConfigured() {
+		t.Skip("CLAW_APP_ID 或 CLAW_APP_SECRET 未设置，跳过飞书消息推送测试")
+	}
+	if len(cfg.ChatIDs) == 0 {
+		t.Skip("CLAW_CHAT_IDS 未设置，跳过飞书消息推送测试")
+	}
+
+	t.Logf("CLAW_APP_ID: %s\n", maskString(cfg.AppID))
+	t.Logf("目标群聊: %v\n", cfg.ChatIDs)
+
+	// 创建消息发送器
+	sender := larkadapter.NewIMSender(cfg)
+
+	// 准备三条消息
+	messages := []struct {
+		index int
+		text  string
+	}{
+		{1, "【MCP测试消息 1/3】这是来自 MCP-server 的第一条测试消息，时间: " + timeNowString()},
+		{2, "【MCP测试消息 2/3】这是来自 MCP-server 的第二条测试消息，确认推送通道正常工作"},
+		{3, "【MCP测试消息 3/3】这是来自 MCP-server 的第三条测试消息，测试完成！"},
+	}
+
+	// 发送消息
+	for _, msg := range messages {
+		t.Logf("\n--- 发送消息 %d ---\n", msg.index)
+		t.Logf("消息内容: %s\n", msg.text)
+
+		results, err := sender.SendTextMessageToAll(msg.text)
+		if err != nil {
+			t.Logf("发送失败: %v\n", err)
+		} else {
+			for _, result := range results {
+				t.Logf("结果: %s\n", result)
+			}
+		}
+	}
+
+	t.Log("\n✓ MCP-server 给飞书客户端推送消息测试完成")
+}
+
+// Test_14_LarkToMCPReceive 测试飞书客户端给 MCP-server 发送消息
+func Test_14_LarkToMCPReceive(t *testing.T) {
+	t.Log("=== 测试14: 飞书客户端给 MCP-server 发送消息 ===")
+
+	// 加载 .env 文件
+	_ = godotenv.Load("../../.env")
+
+	// 检查 LARK_* 配置
+	cfg := larkadapter.LoadConfigWithPrefix("LARK_")
+	if !cfg.IsConfigured() {
+		t.Skip("LARK_APP_ID 或 LARK_APP_SECRET 未设置，跳过飞书消息接收测试")
+	}
+	if len(cfg.ChatIDs) == 0 {
+		t.Skip("LARK_CHAT_IDS 未设置，跳过飞书消息接收测试")
+	}
+
+	t.Logf("LARK_APP_ID: %s\n", maskString(cfg.AppID))
+	t.Logf("LARK_CHAT_IDS: %v\n", cfg.ChatIDs)
+
+	// 创建消息提取器
+	extractor := larkadapter.NewIMExtractor(cfg)
+
+	// 检测最近消息变化
+	t.Log("\n--- 检测最近消息变化 ---\n")
+	result, err := extractor.Detect(time.Now().Add(-24 * time.Hour))
+	if err != nil {
+		t.Logf("检测失败: %v\n", err)
+	} else {
+		t.Logf("检测结果 - HasChanges: %v\n", result.HasChanges)
+		t.Logf("检测到 %d 条变化\n", len(result.Changes))
+
+		for i, change := range result.Changes {
+			t.Logf("  [%d] %s: %s\n", i+1, change.Type, change.Summary)
+		}
+	}
+
+	t.Log("\n提示：请在飞书客户端发送三条新消息，然后重新运行此测试来验证接收功能")
+
+	t.Log("\n✓ 飞书客户端给 MCP-server 发送消息测试完成")
+}
+
+// ========== 辅助函数 ==========
+
+func maskString(s string) string {
+	if len(s) <= 4 {
+		return "****"
+	}
+	return s[:4] + "****"
+}
+
+func timeNowString() string {
+	return time.Now().Format("2006-01-02 15:04:05")
+}
+

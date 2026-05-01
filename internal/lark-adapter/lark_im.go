@@ -21,6 +21,44 @@ func NewIMExtractor(cfg *Config) *IMExtractor {
 	}
 }
 
+// IMSender 群聊消息发送器
+type IMSender struct {
+	config *Config
+	cli    *LarkCLI
+}
+
+// NewIMSender 创建消息发送器
+func NewIMSender(cfg *Config) *IMSender {
+	return &IMSender{
+		config: cfg,
+		cli:    NewLarkCLI(),
+	}
+}
+
+// SendTextMessage 发送文本消息到指定 chat_id
+func (s *IMSender) SendTextMessage(chatID, text string) (string, error) {
+	args := []string{"im", "+messages-send", "--chat-id", chatID, "--text", text, "--as", "bot"}
+	output, err := s.cli.RunCommand(args...)
+	if err != nil {
+		return "", fmt.Errorf("send text message failed: %w", err)
+	}
+	return string(output), nil
+}
+
+// SendTextMessageToAll 发送文本消息到所有配置的 chat_id
+func (s *IMSender) SendTextMessageToAll(text string) ([]string, error) {
+	var results []string
+	for _, chatID := range s.config.ChatIDs {
+		result, err := s.SendTextMessage(chatID, text)
+		if err != nil {
+			results = append(results, fmt.Sprintf("chat %s: error: %v", chatID, err))
+		} else {
+			results = append(results, fmt.Sprintf("chat %s: success: %s", chatID, result))
+		}
+	}
+	return results, nil
+}
+
 // Name 实现接口
 func (e *IMExtractor) Name() string {
 	return "lark_im"
