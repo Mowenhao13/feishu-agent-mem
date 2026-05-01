@@ -5,10 +5,24 @@
 1. 确保已设置 `.env` 文件
 ```bash
 cp .env.example .env
-# 编辑 .env，设置 ARK_API_KEY
+# 编辑 .env，设置所需配置
 ```
 
 2. 确保 Go 版本 >= 1.22
+
+## 环境变量说明
+
+| 环境变量 | 说明 | 测试 |
+|---------|------|-----|
+| `ARK_API_KEY` | 火山引擎 ARK API Key | Test 08-12 |
+| `ARK_BASE_URL` | ARK API 基础地址（可选） | Test 08-12 |
+| `ARK_MODEL` | 使用的模型名称（可选） | Test 08-12 |
+| `CLAW_APP_ID` | 飞书应用 AppID（用于推送消息） | Test 13 |
+| `CLAW_APP_SECRET` | 飞书应用 AppSecret（用于推送消息） | Test 13 |
+| `CLAW_CHAT_IDS` | 飞书 Chat IDs（逗号分隔） | Test 13 |
+| `LARK_APP_ID` | 飞书应用 AppID（用于接收消息） | Test 14 |
+| `LARK_APP_SECRET` | 飞书应用 AppSecret（用于接收消息） | Test 14 |
+| `LARK_CHAT_IDS` | 飞书 Chat IDs（逗号分隔） | Test 14 |
 
 ## 运行测试
 
@@ -62,6 +76,8 @@ go test -v ./test/mcp
 | 10 | RealLLM_DetectCrossTopic | ✅ | 真实 LLM 跨议题检测 |
 | 11 | RealLLM_CheckConflict | ✅ | 真实 LLM 冲突评估 |
 | 12 | RealLLM_EndToEnd | ✅ | 真实 LLM 端到端流程 |
+| 13 | MCPToLarkPush | ⚠️ | MCP-server 推送消息到飞书（需要 CLAW_* 配置） |
+| 14 | LarkToMCPReceive | ⚠️ | 从飞书接收消息到 MCP-server（需要 LARK_* 配置） |
 
 ### 运行示例
 
