@@ -1,0 +1,9 @@
+{
+  "name": "feishu-memory-mcp",
+  "version": "1.0.0",
+  "description": "MCP proxy for feishu-agent-mem",
+  "main": "mcp-proxy.js",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0"
+  }
+}

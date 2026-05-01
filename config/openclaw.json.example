@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "feishu-memory": {
+      "command": "none",
+      "env": {},
+      "url": "http://localhost:37777"
+    }
+  },
+  "skills": {
+    "feishu-memory-interface": {
+      "enabled": true,
+      "config": {
+        "memoryServiceUrl": "http://localhost:37777",
+        "autoSearchOnMessage": true,
+        "maxSearchResults": 5
+      }
+    }
+  },
+  "project": {
+    "name": "feishu-mem",
+    "defaultTopic": "general"
+  }
+}

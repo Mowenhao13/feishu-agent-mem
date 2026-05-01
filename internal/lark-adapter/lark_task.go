@@ -161,41 +161,107 @@ func (e *TaskExtractor) parseTaskChanges(tasks []any, lastCheck time.Time) []Cha
 			}
 
 			guid, _ := itemMap["guid"].(string)
-			summary, _ := itemMap["summary"].(string)
 			if guid == "" {
 				continue
 			}
 
-			// 检查状态变化
-			status, _ := itemMap["status"].(string)
-
-			// 检查创建时间
-			createdAt, _ := itemMap["created_at"].(string)
-			createdTs := parseMessageTime(createdAt)
-
-			if !lastCheck.IsZero() && createdTs > cutoff {
-				changes = append(changes, Change{
-					Type:       "new",
-					EntityType: "task",
-					EntityID:   guid,
-					Summary:    fmt.Sprintf("新任务: %s", summary),
-					Timestamp:  createdTs,
-				})
-			} else if status == "done" {
-				// 检查完成时间
-				completedAt, _ := itemMap["completed_at"].(string)
-				completedTs := parseMessageTime(completedAt)
-				if !lastCheck.IsZero() && completedTs > cutoff && completedTs > 0 {
-					changes = append(changes, Change{
-						Type:       "updated",
-						EntityType: "task",
-						EntityID:   guid,
-						Summary:    fmt.Sprintf("任务已完成: %s", summary),
-						Timestamp:  completedTs,
-					})
-				}
-			}
+			// 分析任务的所有变化类型
+			taskChanges := e.analyzeTaskChanges(itemMap, cutoff, lastCheck.IsZero())
+			changes = append(changes, taskChanges...)
 		}
+	}
+
+	return changes
+}
+
+// analyzeTaskChanges 分析任务的详细变化类型
+func (e *TaskExtractor) analyzeTaskChanges(task map[string]any, cutoff int64, isFirstCheck bool) []Change {
+	var changes []Change
+
+	if isFirstCheck {
+		return changes
+	}
+
+	guid, _ := task["guid"].(string)
+	summary, _ := task["summary"].(string)
+	status, _ := task["status"].(string)
+
+	// 检查创建时间
+	createdAt, _ := task["created_at"].(string)
+	createdTs := parseMessageTime(createdAt)
+
+	// 检查更新时间
+	updatedAt, _ := task["updated_at"].(string)
+	updatedTs := parseMessageTime(updatedAt)
+
+	// 检查完成时间
+	completedAt, _ := task["completed_at"].(string)
+	completedTs := parseMessageTime(completedAt)
+
+	// 1. 检查是否是新任务
+	if createdTs > cutoff {
+		changes = append(changes, Change{
+			Type:       "task_created",
+			EntityType: "task",
+			EntityID:   guid,
+			Summary:    fmt.Sprintf("新任务: %s", summary),
+			Timestamp:  createdTs,
+		})
+	}
+
+	// 2. 检查任务是否完成
+	if status == "done" && completedTs > cutoff {
+		changes = append(changes, Change{
+			Type:       "task_completed",
+			EntityType: "task",
+			EntityID:   guid,
+			Summary:    fmt.Sprintf("任务已完成: %s", summary),
+			Timestamp:  completedTs,
+		})
+	}
+
+	// 3. 检查任务内容更新（排除创建和完成时的更新）
+	if updatedTs > cutoff && updatedTs != createdTs && updatedTs != completedTs {
+		changes = append(changes, Change{
+			Type:       "task_updated",
+			EntityType: "task",
+			EntityID:   guid,
+			Summary:    fmt.Sprintf("任务内容更新: %s", summary),
+			Timestamp:  updatedTs,
+		})
+	}
+
+	// 4. 检查是否有新评论
+	if comments, ok := task["comments"].([]any); ok && len(comments) > 0 {
+		changes = append(changes, Change{
+			Type:       "task_comment_added",
+			EntityType: "task",
+			EntityID:   guid,
+			Summary:    fmt.Sprintf("任务有新评论: %s", summary),
+			Timestamp:  updatedTs,
+		})
+	}
+
+	// 5. 检查截止时间变化
+	if dueDate, ok := task["due_date"].(string); ok && dueDate != "" {
+		changes = append(changes, Change{
+			Type:       "task_due_date_set",
+			EntityType: "task",
+			EntityID:   guid,
+			Summary:    fmt.Sprintf("任务设置截止时间: %s", summary),
+			Timestamp:  updatedTs,
+		})
+	}
+
+	// 6. 检查负责人变化
+	if assignees, ok := task["assignees"].([]any); ok && len(assignees) > 0 {
+		changes = append(changes, Change{
+			Type:       "task_assignee_changed",
+			EntityType: "task",
+			EntityID:   guid,
+			Summary:    fmt.Sprintf("任务负责人变更: %s", summary),
+			Timestamp:  updatedTs,
+		})
 	}
 
 	return changes

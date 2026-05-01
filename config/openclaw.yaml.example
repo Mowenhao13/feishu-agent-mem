@@ -1,0 +1,58 @@
+# feishu-agent-mem 配置示例
+
+project:
+  name: feishu-mem
+  topics:
+    - general
+    - architecture
+    - database
+    - api
+  phases:
+    - initial
+    - design
+    - implementation
+
+lark_cli:
+  bin: lark-cli
+  default_identity: user
+
+git:
+  work_dir: ./data
+  remote: git@github.com:your-org/mem-repo.git
+  auto_push: false
+  branch: main
+  consistency_check:
+    enabled: true
+    interval: 30m
+  archive:
+    enabled: false
+    age: 720h
+  maintenance:
+    gc_interval: 720h
+
+bitable:
+  base_token: basexxxxxx  # 飞书多维表格 Base Token
+  tables:
+    decision: tblxxxxxxx  # 决策表 ID
+    topic: tblyyyyyyy     # 议题表 ID (可选)
+    phase: tblzzzzzz      # 阶段表 ID (可选)
+    relation: tblwwwwww   # 关系表 ID (可选)
+
+events:
+  enabled: false
+  subscribe:
+    - message
+    - calendar
+    - doc
+
+polling:
+  interval: 30s
+
+mcp:
+  port: 37777
+  register_path: ~/.openclaw/openclaw.json
+
+memory:
+  preload_on_start: true
+  max_cache_size: 1000
+  dirty_flush_interval_seconds: 300

@@ -3,3 +3,45 @@
 .claude
 CLAUDE.md
 
+# 二进制文件
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 数据目录
+data/
+
+# 日志目录
+logs/
+
+# PID 文件
+*.pid
+
+# 配置文件（示例保留，真实配置忽略）
+config/openclaw.yaml
+
+# Go
+testbed/
+dist/
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node（MCP 代理）
+scripts/node_modules/
+scripts/package-lock.json
+
+

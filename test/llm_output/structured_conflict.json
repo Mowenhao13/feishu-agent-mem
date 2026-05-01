@@ -1,0 +1,6 @@
+{
+  "contradiction_score": 0.9,
+  "contradiction_type": "direct",
+  "description": "决策A决定使用PostgreSQL作为主数据库，决策B决定使用MySQL作为主数据库，二者结论直接矛盾",
+  "suggestion": "需要选择其中一个数据库作为主数据库，若更看重数据库支持复杂查询和JSON类型的特性，可采用决策A；若更考虑团队的熟悉程度，可采用决策B"
+}

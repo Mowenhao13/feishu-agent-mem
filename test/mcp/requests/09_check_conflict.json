@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": 9,
+  "method": "tools/call",
+  "params": {
+    "name": "check_conflict",
+    "arguments": {
+      "decision_a": "使用 PostgreSQL 作为主数据库，因为它支持复杂查询和 JSON 类型",
+      "decision_b": "使用 MySQL 作为主数据库，因为团队对它更熟悉"
+    }
+  }
+}

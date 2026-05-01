@@ -1,0 +1,12 @@
+{
+  "is_cross_topic": true,
+  "cross_topic_refs": [
+    "用户认证",
+    "API网关"
+  ],
+  "reasons": {
+    "API网关": "API网关可能会验证 session_token 字段，字段长度的变更会对其产生依赖影响",
+    "用户认证": "用户认证的登录流程依赖 session_token 字段，变更字段长度会影响其认证功能"
+  },
+  "confidence": 0.8
+}
