@@ -28,11 +28,8 @@ func (e *ContactExtractor) Name() string {
 // Detect 检测通讯录/人员变化
 // 通讯录变化频率低，通过检测用户信息变更来判断
 func (e *ContactExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
-	changes := []Change{}
-
-	// 通讯录变化检测需要事件订阅支持
-	// 这里只做轻量检测：如果有新的用户搜索请求
-	// 实际的事件驱动靠 lark-event WebSocket 监听
+	var changes []Change
+	cutoff := lastCheck.Unix()
 
 	// 如果是首次检测，不报告变化（通讯录基线数据大）
 	if lastCheck.IsZero() {
@@ -46,11 +43,15 @@ func (e *ContactExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		return result, nil
 	}
 
-	// 非首次：尝试搜索空查询，看能否获取到信息
-	// 通讯录变化不在这里实时检测，建议使用事件订阅
+	// 尝试获取用户信息并分析变化
+	output, err := e.cli.RunCommand("contact", "+search-user", "--query", "")
+	if err == nil {
+		changes = e.parseContactChanges(output, cutoff)
+	}
+
 	result := &DetectResult{
 		Source:     e.Name(),
-		HasChanges: false,
+		HasChanges: len(changes) > 0,
 		DetectedAt: time.Now(),
 		LastCheck:  lastCheck,
 		Changes:    changes,
@@ -58,6 +59,108 @@ func (e *ContactExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 
 	_ = SaveDetectResult(result)
 	return result, nil
+}
+
+// parseContactChanges 解析通讯录变化
+func (e *ContactExtractor) parseContactChanges(output []byte, cutoff int64) []Change {
+	var changes []Change
+
+	var result []any
+	if err := json.Unmarshal(output, &result); err != nil {
+		var single any
+		if err := json.Unmarshal(output, &single); err != nil {
+			return changes
+		}
+		result = []any{single}
+	}
+
+	for _, item := range result {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		data, ok := itemMap["data"].(map[string]any)
+		if !ok {
+			continue
+		}
+		users, ok := data["users"].([]any)
+		if !ok {
+			items, ok := data["items"].([]any)
+			if ok {
+				users = items
+			} else {
+				continue
+			}
+		}
+
+		for _, u := range users {
+			userMap, ok := u.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			userID, _ := userMap["user_id"].(string)
+			name, _ := userMap["name"].(string)
+			enName, _ := userMap["en_name"].(string)
+
+			if userID == "" {
+				continue
+			}
+
+			displayName := name
+			if displayName == "" {
+				displayName = enName
+			}
+
+			// 检查用户状态
+			status, _ := userMap["status"].(map[string]any)
+			if isFrozen, ok := status["is_frozen"].(bool); ok && isFrozen {
+				changes = append(changes, Change{
+					Type:       "contact_user_frozen",
+					EntityType: "contact",
+					EntityID:   userID,
+					Summary:    fmt.Sprintf("用户已冻结: %s", displayName),
+				})
+			}
+
+			if isResigned, ok := status["is_resigned"].(bool); ok && isResigned {
+				changes = append(changes, Change{
+					Type:       "contact_user_resigned",
+					EntityType: "contact",
+					EntityID:   userID,
+					Summary:    fmt.Sprintf("用户已离职: %s", displayName),
+				})
+			}
+
+			// 检查是否有更新时间
+			var userTs int64
+			if updateTime, ok := userMap["update_time"].(string); ok {
+				userTs = parseMessageTime(updateTime)
+				if userTs > cutoff {
+					changes = append(changes, Change{
+						Type:       "contact_user_updated",
+						EntityType: "contact",
+						EntityID:   userID,
+						Summary:    fmt.Sprintf("用户信息更新: %s", displayName),
+						Timestamp:  userTs,
+					})
+				}
+			}
+
+			// 检查部门变更
+			if departments, ok := userMap["departments"].([]any); ok && len(departments) > 0 {
+				changes = append(changes, Change{
+					Type:       "contact_department_changed",
+					EntityType: "contact",
+					EntityID:   userID,
+					Summary:    fmt.Sprintf("用户部门可能变更: %s", displayName),
+					Timestamp:  userTs,
+				})
+			}
+		}
+	}
+
+	return changes
 }
 
 // Extract 提取联系人信息用于决策关联

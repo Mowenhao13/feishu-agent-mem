@@ -1,0 +1,147 @@
+package decision
+
+import "time"
+
+// DecisionNode 决策节点 — 与 decision-tree.md §2.1 严格对齐
+type DecisionNode struct {
+	// === 标识与内容 ===
+	SDRID         string       `json:"sdr_id" yaml:"sdr_id"`
+	GitCommitHash string       `json:"git_commit_hash" yaml:"git_commit_hash"`
+	Title         string       `json:"title" yaml:"title"`
+	Decision      string       `json:"decision" yaml:"decision"`
+	Rationale     string       `json:"rationale" yaml:"rationale"`
+
+	// === 树位置 ===
+	Project string `json:"project" yaml:"project"`
+	Topic   string `json:"topic" yaml:"topic"` // 唯一位置锚点
+
+	// === 时态标签 ===
+	Phase       string      `json:"phase" yaml:"phase"`
+	PhaseScope  PhaseScope  `json:"phase_scope" yaml:"phase_scope"`
+	VersionRange VersionRange `json:"version_range" yaml:"version_range"`
+
+	// === 影响级别 ===
+	ImpactLevel ImpactLevel `json:"impact_level" yaml:"impact_level"`
+
+	// === 跨议题 ===
+	CrossTopicRefs []string `json:"cross_topic_refs" yaml:"cross_topic_refs"`
+
+	// === 树内父子 ===
+	ParentDecision string `json:"parent_decision" yaml:"parent_decision"`
+	ChildrenCount  int    `json:"children_count" yaml:"children_count"`
+
+	// === 人员 ===
+	Proposer     string   `json:"proposer" yaml:"proposer"`
+	Executor     string   `json:"executor" yaml:"executor"`
+	Stakeholders []string `json:"stakeholders" yaml:"stakeholders"`
+
+	// === 关系图谱 ===
+	Relations []Relation `json:"relations" yaml:"relations"`
+
+	// === 飞书关联 ===
+	FeishuLinks FeishuLinks `json:"feishu_links" yaml:"feishu_links"`
+
+	// === 状态 ===
+	Status    DecisionStatus `json:"status" yaml:"status"`
+	CreatedAt time.Time      `json:"created_at" yaml:"created_at"`
+	DecidedAt *time.Time     `json:"decided_at" yaml:"decided_at"`
+}
+
+// PhaseScope 阶段范围
+type PhaseScope string
+
+const (
+	PhaseScopePoint       PhaseScope = "Point"
+	PhaseScopeSpan        PhaseScope = "Span"
+	PhaseScopeRetroactive PhaseScope = "Retroactive"
+)
+
+// ImpactLevel 影响级别（取代 tree_level）
+type ImpactLevel string
+
+const (
+	ImpactAdvisory ImpactLevel = "advisory"
+	ImpactMinor    ImpactLevel = "minor"
+	ImpactMajor    ImpactLevel = "major"
+	ImpactCritical ImpactLevel = "critical"
+)
+
+// DecisionStatus 决策状态
+type DecisionStatus string
+
+const (
+	StatusPending      DecisionStatus = "pending"
+	StatusInDiscussion DecisionStatus = "in_discussion"
+	StatusDecided      DecisionStatus = "decided"
+	StatusExecuting    DecisionStatus = "executing"
+	StatusCompleted    DecisionStatus = "completed"
+	StatusShelved      DecisionStatus = "shelved"
+	StatusRejected     DecisionStatus = "rejected"
+	StatusSuperseded  DecisionStatus = "superseded"
+	StatusDeprecated  DecisionStatus = "deprecated"
+)
+
+// VersionRange 版本范围
+type VersionRange struct {
+	From string `json:"from" yaml:"from"`
+	To   string `json:"to" yaml:"to"` // null = 当前生效
+}
+
+// FeishuLinks 飞书实体关联
+type FeishuLinks struct {
+	RelatedChatIDs      []string `json:"related_chat_ids" yaml:"related_chat_ids"`
+	RelatedMessageIDs []string `json:"related_message_ids" yaml:"related_message_ids"`
+	RelatedDocTokens  []string `json:"related_doc_tokens" yaml:"related_doc_tokens"`
+	RelatedEventIDs   []string `json:"related_event_ids" yaml:"related_event_ids"`
+	RelatedMeetingIDs []string `json:"related_meeting_ids" yaml:"related_meeting_ids"`
+	RelatedTaskGUIDs []string `json:"related_task_guids" yaml:"related_task_guids"`
+	RelatedMinuteTokens []string `json:"related_minute_tokens" yaml:"related_minute_tokens"`
+}
+
+// NewDecisionNode 创建新的决策节点
+func NewDecisionNode(sdrID, title, project, topic string) *DecisionNode {
+	return &DecisionNode{
+		SDRID:         sdrID,
+		Title:         title,
+		Project:       project,
+		Topic:         topic,
+		PhaseScope:    PhaseScopePoint,
+		ImpactLevel:   ImpactMinor,
+		Status:        StatusPending,
+		CreatedAt:     time.Now(),
+		Relations:     make([]Relation, 0),
+		CrossTopicRefs: make([]string, 0),
+		Stakeholders:  make([]string, 0),
+	}
+}
+
+// IsActive 检查决策是否处于活动状态
+func (d *DecisionNode) IsActive() bool {
+	switch d.Status {
+	case StatusPending, StatusInDiscussion, StatusDecided, StatusExecuting:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValid 检查状态是否有效
+func (s DecisionStatus) IsValid() bool {
+	switch s {
+	case StatusPending, StatusInDiscussion, StatusDecided, StatusExecuting,
+		StatusCompleted, StatusShelved, StatusRejected, StatusSuperseded, StatusDeprecated:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValid 检查影响级别是否有效
+func (i ImpactLevel) IsValid() bool {
+	switch i {
+	case ImpactAdvisory, ImpactMinor, ImpactMajor, ImpactCritical:
+		return true
+	default:
+		return false
+	}
+}

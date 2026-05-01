@@ -93,6 +93,7 @@ func (e *OKRExtractor) getCycleList() ([]any, error) {
 
 func (e *OKRExtractor) parseNewCycles(cycles []any, lastCheck time.Time) []Change {
 	var changes []Change
+	_ = lastCheck.Unix()
 
 	for _, cycle := range cycles {
 		cycleMap, ok := cycle.(map[string]any)
@@ -116,17 +117,61 @@ func (e *OKRExtractor) parseNewCycles(cycles []any, lastCheck time.Time) []Chang
 			cycleID, _ := itemMap["cycle_id"].(string)
 			cycleName, _ := itemMap["name"].(string)
 
-			// 没有时间戳字段，首次检测不报告
+			// 首次检测不报告
 			if lastCheck.IsZero() {
 				continue
 			}
 
-			changes = append(changes, Change{
-				Type:       "new",
-				EntityType: "okr_cycle",
-				EntityID:   cycleID,
-				Summary:    fmt.Sprintf("OKR周期变化: %s", cycleName),
-			})
+			// 获取周期时间信息
+			var cycleTs int64
+			if startTime, ok := itemMap["start_time"].(string); ok {
+				cycleTs = parseMessageTime(startTime)
+			} else if endTime, ok := itemMap["end_time"].(string); ok {
+				cycleTs = parseMessageTime(endTime)
+			}
+
+			// 检查周期状态
+			status, _ := itemMap["status"].(string)
+
+			switch status {
+			case "active":
+				changes = append(changes, Change{
+					Type:       "okr_cycle_activated",
+					EntityType: "okr_cycle",
+					EntityID:   cycleID,
+					Summary:    fmt.Sprintf("OKR 周期已启动: %s", cycleName),
+					Timestamp:  cycleTs,
+				})
+
+			case "closed":
+				changes = append(changes, Change{
+					Type:       "okr_cycle_closed",
+					EntityType: "okr_cycle",
+					EntityID:   cycleID,
+					Summary:    fmt.Sprintf("OKR 周期已关闭: %s", cycleName),
+					Timestamp:  cycleTs,
+				})
+
+			default:
+				changes = append(changes, Change{
+					Type:       "okr_cycle_updated",
+					EntityType: "okr_cycle",
+					EntityID:   cycleID,
+					Summary:    fmt.Sprintf("OKR 周期更新: %s", cycleName),
+					Timestamp:  cycleTs,
+				})
+			}
+
+			// 检查是否有进度更新标记
+			if hasProgress, ok := itemMap["has_progress_updates"].(bool); ok && hasProgress {
+				changes = append(changes, Change{
+					Type:       "okr_progress_updated",
+					EntityType: "okr",
+					EntityID:   cycleID,
+					Summary:    fmt.Sprintf("OKR 进度更新: %s", cycleName),
+					Timestamp:  cycleTs,
+				})
+			}
 		}
 	}
 

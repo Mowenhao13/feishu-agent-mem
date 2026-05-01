@@ -1,6 +1,6 @@
 {
   "source": "lark_im",
-  "extracted_at": "2026-04-29T15:37:16.749126+08:00",
+  "extracted_at": "2026-04-29T19:38:15.097314+08:00",
   "raw_data": {
     "_errors": {
       "p2p_messages": "lark-cli im +chat-messages-list --user-id ou_2e2874a35309566a79a8116d505b1d46 failed: exit status 1, stderr: {\n  \"ok\": false,\n  \"identity\": \"user\",\n  \"error\": {\n    \"type\": \"not_found\",\n    \"message\": \"P2P chat not found for this user\"\n  },\n  \"_notice\": {\n    \"update\": {\n      \"current\": \"1.0.18\",\n      \"latest\": \"1.0.20\",\n      \"message\": \"lark-cli 1.0.20 available, current 1.0.18\"\n    }\n  }\n}\n"

@@ -26,68 +26,56 @@ func (e *IMExtractor) Name() string {
 	return "lark_im"
 }
 
-// Detect 检测消息变化：群聊 + P2P 双人会话
-// 使用 +chat-messages-list 获取消息后按时间过滤（无需额外 scope）
+// Detect 检测消息变化：群聊 + P2P
 func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
-	changes := []Change{}
+	var changes []Change
+
+	// 首次检测：拉取最近 1 小时的消息作为基线
+	if lastCheck.IsZero() {
+		lastCheck = time.Now().Add(-1 * time.Hour)
+	}
+
 	cutoff := lastCheck.Unix()
 
-	// 首次检测跳过，不把已有数据报为新增
-	if lastCheck.IsZero() {
-		result := &DetectResult{
-			Source:     e.Name(),
-			HasChanges: false,
-			DetectedAt: time.Now(),
-			LastCheck:  lastCheck,
-		}
-		_ = SaveDetectResult(result)
-		return result, nil
-	}
-
 	// 1. 检测群聊消息
-	if len(e.config.ChatIDs) > 0 {
-		chatID := e.config.ChatIDs[0]
-		if strings.Contains(chatID, ",") {
-			chatID = strings.Split(chatID, ",")[0]
+	for _, chatID := range e.config.ChatIDs {
+		id := chatID
+		if strings.Contains(id, ",") {
+			id = strings.Split(id, ",")[0]
 		}
 
-		// 获取最新消息并在本地按时间过滤
-		items, err := e.getGroupMessageItems(chatID)
-		if err == nil {
-			for _, item := range items {
-				ts := extractTimestamp(item)
-				if ts > cutoff {
-					mid, _ := item["message_id"].(string)
-					body := extractBody(item)
-					senderName := extractSender(item)
-					changes = append(changes, Change{
-						Type:       "new",
-						EntityType: "group_message",
-						EntityID:   mid,
-						Summary:    fmt.Sprintf("[群聊] %s: %s", senderName, truncateContent(body, 60)),
-						Timestamp:  ts,
-					})
-				}
+		items, err := e.getGroupMessageItems(id, lastCheck)
+		if err != nil {
+			continue
+		}
+
+		for _, item := range items {
+			ts := extractTimestamp(item)
+			if ts <= cutoff {
+				continue
 			}
+			mid, _ := item["message_id"].(string)
+			body := extractBody(item)
+			senderName := extractSender(item)
+			msgType, _ := item["msg_type"].(string)
+			changes = append(changes, e.classifyMessageChange("group_message", mid, msgType, senderName, body, ts))
 		}
 	}
 
-	// 2. 检测 P2P 双人会话
-	p2pItems, err := e.getP2PMessageItems()
-	if err == nil {
-		for _, item := range p2pItems {
-			ts := extractTimestamp(item)
-			if ts > cutoff {
+	// 2. P2P 双人会话
+	if e.config.UserID != "" {
+		p2pItems, err := e.getP2PMessageItems(lastCheck)
+		if err == nil {
+			for _, item := range p2pItems {
+				ts := extractTimestamp(item)
+				if ts <= cutoff {
+					continue
+				}
 				mid, _ := item["message_id"].(string)
 				body := extractBody(item)
 				senderName := extractSender(item)
-				changes = append(changes, Change{
-					Type:       "new",
-					EntityType: "p2p_message",
-					EntityID:   mid,
-					Summary:    fmt.Sprintf("[双人会话] %s: %s", senderName, truncateContent(body, 60)),
-					Timestamp:  ts,
-				})
+				msgType, _ := item["msg_type"].(string)
+				changes = append(changes, e.classifyMessageChange("p2p_message", mid, msgType, senderName, body, ts))
 			}
 		}
 	}
@@ -99,45 +87,85 @@ func (e *IMExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 		LastCheck:  lastCheck,
 		Changes:    changes,
 	}
-
 	_ = SaveDetectResult(result)
 	return result, nil
+}
+
+// classifyMessageChange 根据消息类型分类变化
+func (e *IMExtractor) classifyMessageChange(entityType, entityID, msgType, senderName, body string, timestamp int64) Change {
+	var changeType, summary string
+
+	switch msgType {
+	case "text":
+		changeType = "new_text"
+		summary = fmt.Sprintf("[%s] %s: %s", entityTypeToLabel(entityType), senderName, truncateContent(body, 60))
+	case "image":
+		changeType = "new_image"
+		summary = fmt.Sprintf("[%s] %s 发送了图片", entityTypeToLabel(entityType), senderName)
+	case "file":
+		changeType = "new_file"
+		summary = fmt.Sprintf("[%s] %s 发送了文件", entityTypeToLabel(entityType), senderName)
+	case "audio":
+		changeType = "new_audio"
+		summary = fmt.Sprintf("[%s] %s 发送了语音", entityTypeToLabel(entityType), senderName)
+	case "video":
+		changeType = "new_video"
+		summary = fmt.Sprintf("[%s] %s 发送了视频", entityTypeToLabel(entityType), senderName)
+	case "sticker":
+		changeType = "new_sticker"
+		summary = fmt.Sprintf("[%s] %s 发送了贴纸", entityTypeToLabel(entityType), senderName)
+	case "post":
+		changeType = "new_post"
+		summary = fmt.Sprintf("[%s] %s 发送了富文本消息", entityTypeToLabel(entityType), senderName)
+	case "interactive":
+		changeType = "new_card"
+		summary = fmt.Sprintf("[%s] %s 发送了卡片消息", entityTypeToLabel(entityType), senderName)
+	case "share_chat":
+		changeType = "new_share_chat"
+		summary = fmt.Sprintf("[%s] %s 分享了群聊", entityTypeToLabel(entityType), senderName)
+	case "share_user":
+		changeType = "new_share_user"
+		summary = fmt.Sprintf("[%s] %s 分享了名片", entityTypeToLabel(entityType), senderName)
+	case "merge_forward":
+		changeType = "new_merge_forward"
+		summary = fmt.Sprintf("[%s] %s 转发了合并消息", entityTypeToLabel(entityType), senderName)
+	default:
+		changeType = "new"
+		summary = fmt.Sprintf("[%s] %s: %s", entityTypeToLabel(entityType), senderName, truncateContent(body, 60))
+	}
+
+	return Change{
+		Type:       changeType,
+		EntityType: entityType,
+		EntityID:   entityID,
+		Summary:    summary,
+		Timestamp:  timestamp,
+	}
+}
+
+func entityTypeToLabel(entityType string) string {
+	if entityType == "group_message" {
+		return "群聊"
+	}
+	return "双人会话"
 }
 
 // Extract 提取全量数据
 func (e *IMExtractor) Extract() error {
 	rawData := make(map[string]any)
-	errors := make(map[string]string)
 
-	// P2P 会话消息
-	if items, err := e.getP2PMessageItems(); err == nil {
-		rawData["p2p_messages"] = items
-	} else {
-		errors["p2p_messages"] = err.Error()
-	}
-
-	// 群聊消息 & pin
-	if len(e.config.ChatIDs) > 0 {
-		chatID := e.config.ChatIDs[0]
-		if strings.Contains(chatID, ",") {
-			chatID = strings.Split(chatID, ",")[0]
-		}
-
-		if items, err := e.getGroupMessageItems(chatID); err == nil {
+	for _, chatID := range e.config.ChatIDs {
+		items, err := e.getGroupMessageItems(chatID, time.Time{})
+		if err == nil {
 			rawData["chat_messages"] = items
-		} else {
-			errors["chat_messages"] = err.Error()
-		}
-
-		if pins, err := e.getPinMessages(chatID); err == nil {
-			rawData["pin_messages"] = pins
-		} else {
-			errors["pin_messages"] = err.Error()
 		}
 	}
 
-	if len(errors) > 0 {
-		rawData["_errors"] = errors
+	if e.config.UserID != "" {
+		items, err := e.getP2PMessageItems(time.Time{})
+		if err == nil {
+			rawData["p2p_messages"] = items
+		}
 	}
 
 	result := &ExtractionResult{
@@ -146,24 +174,17 @@ func (e *IMExtractor) Extract() error {
 		RawData:     rawData,
 		Formatted:   map[string]any{"extracted": true},
 	}
-
-	if err := SaveToJSON(e.Name(), result); err != nil {
-		return fmt.Errorf("save result failed: %w", err)
-	}
-
-	return nil
+	return SaveToJSON(e.Name(), result)
 }
 
 // ========== P2P 双人会话 ==========
 
-// getP2PMessageItems 获取 P2P 双人会话的消息列表
-func (e *IMExtractor) getP2PMessageItems() ([]map[string]any, error) {
-	// 尝试用 +chat-messages-list --user-id 获取 P2P 消息
-	// 如果 P2P 会话不存在，返回 nil 不报错
-	output, err := e.cli.RunCommand(
-		"im", "+chat-messages-list",
-		"--user-id", "ou_2e2874a35309566a79a8116d505b1d46",
-	)
+func (e *IMExtractor) getP2PMessageItems(lastCheck time.Time) ([]map[string]any, error) {
+	args := []string{"im", "+chat-messages-list", "--user-id", e.config.UserID}
+	if !lastCheck.IsZero() {
+		args = append(args, "--start", lastCheck.Format(time.RFC3339))
+	}
+	output, err := e.cli.RunCommand(args...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,18 +193,18 @@ func (e *IMExtractor) getP2PMessageItems() ([]map[string]any, error) {
 
 // ========== 群聊 ==========
 
-// getGroupMessageItems 获取群聊消息列表
-func (e *IMExtractor) getGroupMessageItems(chatID string) ([]map[string]any, error) {
-	output, err := e.cli.RunCommand(
-		"im", "+chat-messages-list",
-		"--chat-id", chatID,
-		"--page-all",
-	)
+func (e *IMExtractor) getGroupMessageItems(chatID string, lastCheck time.Time) ([]map[string]any, error) {
+	args := []string{"im", "+chat-messages-list", "--chat-id", chatID}
+	if !lastCheck.IsZero() {
+		args = append(args, "--start", lastCheck.Format(time.RFC3339))
+	}
+	output, err := e.cli.RunCommand(args...)
 	if err != nil {
-		output, err = e.cli.RunCommand(
-			"im", "+chat-messages-list",
-			"--chat-id", chatID,
-		)
+		args2 := []string{"im", "+chat-messages-list", "--chat-id", chatID}
+		if !lastCheck.IsZero() {
+			args2 = append(args2, "--start", lastCheck.Format(time.RFC3339))
+		}
+		output, err = e.cli.RunCommand(args2...)
 		if err != nil {
 			return nil, err
 		}
@@ -191,76 +212,40 @@ func (e *IMExtractor) getGroupMessageItems(chatID string) ([]map[string]any, err
 	return parseChatMessageList(output)
 }
 
-// ========== Pin 消息 ==========
-
-func (e *IMExtractor) getPinMessages(chatID string) ([]any, error) {
-	output, err := e.cli.RunCommand(
-		"im", "pins", "list",
-		"--params", fmt.Sprintf(`{"chat_id": "%s"}`, chatID),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	var result []any
-	if err := json.Unmarshal(output, &result); err != nil {
-		var single any
-		if err := json.Unmarshal(output, &single); err != nil {
-			return nil, err
-		}
-		result = []any{single}
-	}
-	return result, nil
-}
-
 // ========== 解析工具 ==========
 
-// parseChatMessageList 解析 +chat-messages-list 的输出为统一的消息列表
 func parseChatMessageList(output []byte) ([]map[string]any, error) {
-	var list []any
-	if err := json.Unmarshal(output, &list); err != nil {
-		var single any
-		if err := json.Unmarshal(output, &single); err != nil {
-			return nil, err
-		}
-		list = []any{single}
+	// lark-cli +chat-messages-list 直接返回数组格式
+	var list []map[string]any
+	if err := json.Unmarshal(output, &list); err == nil {
+		return list, nil
 	}
 
-	var items []map[string]any
-	for _, outer := range list {
-		outerMap, ok := outer.(map[string]any)
-		if !ok {
-			continue
-		}
-		data, ok := outerMap["data"].(map[string]any)
-		if !ok {
-			continue
-		}
-		// +chat-messages-list 返回 messages 字段
-		rawList, ok := data["messages"].([]any)
-		if !ok {
-			continue
-		}
-		for _, raw := range rawList {
-			item, ok := raw.(map[string]any)
-			if !ok {
-				continue
+	// 兜底：可能是 {data: {messages: [...]}} 格式
+	var wrapper map[string]any
+	if err := json.Unmarshal(output, &wrapper); err != nil {
+		return nil, fmt.Errorf("failed to parse chat-messages-list output: %s", err)
+	}
+	if data, ok := wrapper["data"].(map[string]any); ok {
+		if msgs, ok := data["messages"].([]any); ok {
+			var result []map[string]any
+			for _, m := range msgs {
+				if mm, ok := m.(map[string]any); ok {
+					result = append(result, mm)
+				}
 			}
-			items = append(items, item)
+			return result, nil
 		}
 	}
-	return items, nil
+	return nil, fmt.Errorf("could not parse chat-messages-list output")
 }
 
-// extractTimestamp 从消息中提取时间戳（尝试多个字段）
 func extractTimestamp(item map[string]any) int64 {
-	// 优先用 create_time 字段
 	if ct, ok := item["create_time"].(string); ok {
 		if ts := parseMessageTime(ct); ts > 0 {
 			return ts
 		}
 	}
-	// 尝试 msg_time
 	if mt, ok := item["msg_time"].(string); ok {
 		if ts := parseMessageTime(mt); ts > 0 {
 			return ts
@@ -269,11 +254,9 @@ func extractTimestamp(item map[string]any) int64 {
 	return 0
 }
 
-// extractBody 从消息中提取文本内容
 func extractBody(item map[string]any) string {
-	// 先尝试直接 content 字段
 	if content, ok := item["content"].(string); ok && content != "" {
-		// 飞书文本消息的 content 可能是 JSON 格式：{"text":"xxx"}
+		// 飞书文本消息 content 可能是 JSON: {"text":"xxx"}
 		if strings.HasPrefix(content, "{") {
 			var obj map[string]any
 			if err := json.Unmarshal([]byte(content), &obj); err == nil {
@@ -284,7 +267,6 @@ func extractBody(item map[string]any) string {
 		}
 		return content
 	}
-	// 尝试 body.content
 	if body, ok := item["body"].(map[string]any); ok {
 		if content, ok := body["content"].(string); ok {
 			return content
@@ -293,7 +275,6 @@ func extractBody(item map[string]any) string {
 	return ""
 }
 
-// extractSender 从消息中提取发送者名称
 func extractSender(item map[string]any) string {
 	if sender, ok := item["sender"].(map[string]any); ok {
 		if name, ok := sender["name"].(string); ok {

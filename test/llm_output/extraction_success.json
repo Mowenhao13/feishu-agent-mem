@@ -1,0 +1,22 @@
+{
+  "has_decision": true,
+  "confidence": 1,
+  "decision": {
+    "title": "决定使用PostgreSQL作为主数据库",
+    "decision": "决定使用PostgreSQL作为主数据库",
+    "rationale": "支持复杂查询和JSON类型",
+    "suggested_topic": "数据库架构",
+    "impact_level": "major",
+    "phase_scope": "Point",
+    "proposer": "李四",
+    "executor": "张三",
+    "related_entities": {
+      "chat_ids": [],
+      "doc_tokens": [],
+      "meeting_ids": [],
+      "task_guids": [],
+      "event_ids": []
+    }
+  },
+  "extracted_from": "决定使用PostgreSQL作为主数据库，因其支持复杂查询和JSON类型，执行人张三，提出人李四。"
+}

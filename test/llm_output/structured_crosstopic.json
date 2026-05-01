@@ -1,0 +1,12 @@
+{
+  "is_cross_topic": true,
+  "cross_topic_refs": [
+    "用户认证",
+    "API网关"
+  ],
+  "reasons": {
+    "API网关": "该议题在处理请求时可能会验证 session_token，依赖 user_profile 表的 session_token 字段",
+    "用户认证": "该议题的认证流程依赖 user_profile 表的 session_token 字段"
+  },
+  "confidence": 0.8
+}

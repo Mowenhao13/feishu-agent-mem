@@ -25,48 +25,28 @@ func (e *VCExtractor) Name() string {
 	return "lark_vc"
 }
 
-// Detect 检测新结束的会议
+// Detect 检测会议变化（新会议、会议结束、会议纪要等）
 func (e *VCExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 	changes := []Change{}
-
-	// 搜索自 lastCheck 以来结束的会议
-	startTs := lastCheck.Unix()
-	endTs := time.Now().Unix()
+	cutoff := lastCheck.Unix()
 
 	if !lastCheck.IsZero() {
-		output, err := e.cli.RunCommand(
-			"vc", "+search",
-			"--start-time", fmt.Sprintf("%d", startTs),
-			"--end-time", fmt.Sprintf("%d", endTs),
-		)
+		output, err := e.cli.RunCommand("vc", "+search")
 		if err != nil {
-			// +search 不支持时间范围则获取全部再过滤
-			output, err = e.cli.RunCommand("vc", "+search")
-			if err != nil {
-				result := &DetectResult{
-					Source:     e.Name(),
-					HasChanges: false,
-					DetectedAt: time.Now(),
-					LastCheck:  lastCheck,
-				}
-				_ = SaveDetectResult(result)
-				return result, nil
+			result := &DetectResult{
+				Source:     e.Name(),
+				HasChanges: false,
+				DetectedAt: time.Now(),
+				LastCheck:  lastCheck,
 			}
+			_ = SaveDetectResult(result)
+			return result, nil
 		}
 
-		meetings := e.parseEndedMeetings(output)
-		for _, m := range meetings {
-			changes = append(changes, Change{
-				Type:       "new",
-				EntityType: "meeting",
-				EntityID:   m["meeting_id"].(string),
-				Summary:    fmt.Sprintf("新结束会议: %s", m["topic"].(string)),
-			})
-		}
+		// 分析会议的详细变化
+		meetings := e.parseMeetingsWithDetails(output, cutoff)
+		changes = append(changes, meetings...)
 	}
-
-	// 检测会议纪要（note_doc）
-	// 如果有新结束的会议，标记为需提取纪要
 
 	result := &DetectResult{
 		Source:     e.Name(),
@@ -78,6 +58,124 @@ func (e *VCExtractor) Detect(lastCheck time.Time) (*DetectResult, error) {
 
 	_ = SaveDetectResult(result)
 	return result, nil
+}
+
+// parseMeetingsWithDetails 解析会议并识别各种变化类型
+func (e *VCExtractor) parseMeetingsWithDetails(output []byte, cutoff int64) []Change {
+	var changes []Change
+
+	var result []any
+	if err := json.Unmarshal(output, &result); err != nil {
+		var single any
+		if err := json.Unmarshal(output, &single); err != nil {
+			return changes
+		}
+		result = []any{single}
+	}
+
+	for _, item := range result {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		data, ok := itemMap["data"].(map[string]any)
+		if !ok {
+			continue
+		}
+		items, ok := data["items"].([]any)
+		if !ok {
+			continue
+		}
+		for _, m := range items {
+			mMap, ok := m.(map[string]any)
+			if !ok {
+				continue
+			}
+			meetingID, _ := mMap["meeting_id"].(string)
+			topic, _ := mMap["topic"].(string)
+			if meetingID == "" {
+				continue
+			}
+
+			// 获取会议时间
+			var meetingTs int64
+			if endTime, ok := mMap["end_time"].(string); ok {
+				meetingTs = parseMessageTime(endTime)
+			} else if createTime, ok := mMap["create_time"].(string); ok {
+				meetingTs = parseMessageTime(createTime)
+			}
+
+			// 只处理时间范围内的会议
+			if meetingTs <= cutoff {
+				continue
+			}
+
+			// 分析会议状态
+			status, _ := mMap["status"].(string)
+
+			switch status {
+			case "ended":
+				changes = append(changes, Change{
+					Type:       "meeting_ended",
+					EntityType: "meeting",
+					EntityID:   meetingID,
+					Summary:    fmt.Sprintf("会议已结束: %s", topic),
+					Timestamp:  meetingTs,
+				})
+
+				// 检查是否有会议纪要
+				if noteDoc, ok := mMap["note_doc"].(map[string]any); ok && noteDoc != nil {
+					changes = append(changes, Change{
+						Type:       "meeting_minutes_available",
+						EntityType: "meeting_minutes",
+						EntityID:   meetingID,
+						Summary:    fmt.Sprintf("会议纪要生成: %s", topic),
+						Timestamp:  meetingTs,
+					})
+				}
+
+			case "upcoming":
+				changes = append(changes, Change{
+					Type:       "meeting_scheduled",
+					EntityType: "meeting",
+					EntityID:   meetingID,
+					Summary:    fmt.Sprintf("新会议安排: %s", topic),
+					Timestamp:  meetingTs,
+				})
+
+			case "recording":
+				changes = append(changes, Change{
+					Type:       "meeting_recording",
+					EntityType: "meeting",
+					EntityID:   meetingID,
+					Summary:    fmt.Sprintf("会议录制中: %s", topic),
+					Timestamp:  meetingTs,
+				})
+
+			default:
+				changes = append(changes, Change{
+					Type:       "meeting_updated",
+					EntityType: "meeting",
+					EntityID:   meetingID,
+					Summary:    fmt.Sprintf("会议更新: %s", topic),
+					Timestamp:  meetingTs,
+				})
+			}
+
+			// 检查是否有录制文件
+			if recording, ok := mMap["recording"].(map[string]any); ok && recording != nil {
+				changes = append(changes, Change{
+					Type:       "meeting_recording_available",
+					EntityType: "meeting_recording",
+					EntityID:   meetingID,
+					Summary:    fmt.Sprintf("会议录制文件就绪: %s", topic),
+					Timestamp:  meetingTs,
+				})
+			}
+		}
+	}
+
+	return changes
 }
 
 // Extract 提取会议决策信息

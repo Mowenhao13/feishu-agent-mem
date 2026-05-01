@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "feishu-memory": {
+      "command": "/path/to/feishu-agent-mem/mcp-server",
+      "args": [],
+      "env": {
+        "CONFIG_PATH": "/path/to/config/openclaw.yaml",
+        "GIT_WORK_DIR": "/path/to/git/repo"
+      }
+    }
+  }
+}

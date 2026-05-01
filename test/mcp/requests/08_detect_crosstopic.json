@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "tools/call",
+  "params": {
+    "name": "detect_crosstopic",
+    "arguments": {
+      "title": "用户表字段变更",
+      "decision": "将 user_profile 表的 session_token 字段从 256 字节扩展到 512 字节",
+      "rationale": "新的 JWT 格式需要更长的 token 字段",
+      "impact_level": "major",
+      "candidate_topics": ["数据库架构", "用户认证", "API网关", "前端框架"]
+    }
+  }
+}

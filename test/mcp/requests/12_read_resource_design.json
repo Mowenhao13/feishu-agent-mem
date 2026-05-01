@@ -1,0 +1,8 @@
+{
+  "jsonrpc": "2.0",
+  "id": 12,
+  "method": "resources/read",
+  "params": {
+    "uri": "docs://design"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "method": "tools/call",
+  "params": {
+    "name": "extract_decision",
+    "arguments": {
+      "content": "我们决定使用 PostgreSQL 作为主数据库，因为它支持复杂查询和 JSON 类型。由张三负责实施，李四作为负责人。",
+      "topics": ["数据库架构", "缓存架构", "用户认证"]
+    }
+  }
+}

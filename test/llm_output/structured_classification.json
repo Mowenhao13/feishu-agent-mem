@@ -1,0 +1,5 @@
+{
+  "topic": "数据库架构",
+  "confidence": 0.9,
+  "reasoning": "决策内容是选择PostgreSQL作为主数据库，属于数据库架构相关决策"
+}

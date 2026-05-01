@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "classify_topic",
+    "arguments": {
+      "decision": "使用 Redis Cluster 作为缓存方案，支持高可用性和分片",
+      "topics": ["数据库架构", "缓存架构", "前端框架", "用户认证", "API网关"]
+    }
+  }
+}

@@ -2,28 +2,41 @@ package larkadapter
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
+// DefaultTimeout lark-cli 默认超时
+const DefaultTimeout = 30 * time.Second
+
 // LarkCLI lark-cli 调用封装
-type LarkCLI struct{}
+type LarkCLI struct {
+	Timeout time.Duration
+}
 
 // NewLarkCLI 创建 lark-cli 封装
 func NewLarkCLI() *LarkCLI {
-	return &LarkCLI{}
+	return &LarkCLI{Timeout: DefaultTimeout}
 }
 
-// RunCommand 运行 lark-cli 命令
+// RunCommand 运行 lark-cli 命令（带超时）
 func (l *LarkCLI) RunCommand(args ...string) ([]byte, error) {
-	cmd := exec.Command("lark-cli", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), l.Timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "lark-cli", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("lark-cli %s timed out after %v", strings.Join(args, " "), l.Timeout)
+		}
 		return nil, fmt.Errorf("lark-cli %s failed: %w, stderr: %s", strings.Join(args, " "), err, stderr.String())
 	}
 
@@ -37,13 +50,4 @@ func (l *LarkCLI) RunCommandJSON(result any, args ...string) error {
 		return err
 	}
 	return json.Unmarshal(output, result)
-}
-
-// TryCommand 尝试运行命令，失败时返回模拟数据并标记为模拟
-func (l *LarkCLI) TryCommand(args ...string) (output []byte, isMock bool, err error) {
-	output, err = l.RunCommand(args...)
-	if err != nil {
-		return nil, true, err
-	}
-	return output, false, nil
 }

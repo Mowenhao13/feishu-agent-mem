@@ -2,16 +2,15 @@ package larkadapter
 
 import (
 	"os"
+	"strings"
 )
 
 // Config 飞书适配器配置
 type Config struct {
-	// AppID 飞书应用 ID
-	AppID string
-	// AppSecret 飞书应用密钥
+	AppID     string
 	AppSecret string
-	// ChatIDs 监控的群聊 ID 列表
-	ChatIDs []string
+	ChatIDs   []string
+	UserID    string
 }
 
 // LoadConfig 从环境变量加载配置
@@ -21,23 +20,25 @@ func LoadConfig() *Config {
 		AppSecret: os.Getenv("LARK_APP_SECRET"),
 	}
 
-	// 从 LARK_CHAT_IDS 环境变量读取群聊 ID（逗号分隔）
-	if chatIDs := os.Getenv("LARK_CHAT_IDS"); chatIDs != "" {
-		// 在实际使用时需要解析逗号分隔的字符串
-		// 这里先保留原始字符串，具体解析逻辑在各适配器中实现
-		cfg.ChatIDs = []string{chatIDs}
+	// 解析 LARK_CHAT_IDS（逗号分隔）
+	if raw := os.Getenv("LARK_CHAT_IDS"); raw != "" {
+		for _, id := range strings.Split(raw, ",") {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				cfg.ChatIDs = append(cfg.ChatIDs, id)
+			}
+		}
 	}
+
+	cfg.UserID = os.Getenv("LARK_USER_ID")
 
 	return cfg
 }
 
-// CheckLarkConfig 检查飞书配置是否完整
-func CheckLarkConfig() (missing []string) {
-	if os.Getenv("LARK_APP_ID") == "" {
-		missing = append(missing, "LARK_APP_ID")
+// FirstChatID 返回第一个 chat-id（常用场景），不存在则返回空串
+func (c *Config) FirstChatID() string {
+	if len(c.ChatIDs) > 0 {
+		return c.ChatIDs[0]
 	}
-	if os.Getenv("LARK_APP_SECRET") == "" {
-		missing = append(missing, "LARK_APP_SECRET")
-	}
-	return missing
+	return ""
 }
