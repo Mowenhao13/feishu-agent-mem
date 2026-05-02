@@ -3,12 +3,15 @@ package main
 import (
 	"log"
 	"os"
+	gosignal "os/signal"
+	"syscall"
 
 	"github.com/joho/godotenv"
 
 	"feishu-mem/internal/config"
 	"feishu-mem/internal/core"
 	"feishu-mem/internal/mcp"
+	"feishu-mem/internal/storage/bitable"
 	"feishu-mem/internal/storage/git"
 )
 
@@ -48,16 +51,42 @@ func main() {
 		}
 	}
 
-	// 4. 创建 MCP 服务器
+	// 4. 初始化 Bitable 存储
 	var bitableStore mcp.BitableStoreInterface
+	if settings.Bitable.BaseToken != "" {
+		bitableStore = bitable.NewBitableStore(bitable.Config{
+			BaseToken: settings.Bitable.BaseToken,
+			Tables: bitable.TablesConfig{
+				Decision: settings.Bitable.Tables.Decision,
+				Topic:    settings.Bitable.Tables.Topic,
+				Phase:    settings.Bitable.Tables.Phase,
+				Relation: settings.Bitable.Tables.Relation,
+			},
+		}, nil)
+		log.Printf("Bitable store initialized with base_token: %s", settings.Bitable.BaseToken)
+	} else {
+		log.Printf("Warning: Bitable not configured (FEISHU_BASE_TOKEN not set), bitable features disabled")
+	}
+
+	// 5. 创建 MCP 服务器
 	server := mcp.NewMCPServer(memoryGraph, gitStorage, bitableStore)
 
-	// 5. 启动服务器（stdio 模式）
 	log.Printf("Feishu Memory MCP Server starting...")
 	log.Printf("  Project: %s", settings.Project.Name)
 	log.Printf("  Decisions loaded: %d", memoryGraph.Count())
 
-	if err := server.Start(); err != nil {
-		log.Fatalf("MCP server error: %v", err)
-	}
+	// 6. 启动 MCP Server (stdio 模式)
+	go func() {
+		if err := server.Start(); err != nil {
+			log.Fatalf("MCP server error: %v", err)
+		}
+	}()
+
+	// 7. 等待退出信号
+	sigChan := make(chan os.Signal, 1)
+	gosignal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-sigChan
+	log.Printf("Received signal: %v, shutting down...", sig)
+	server.Stop()
+	log.Println("MCP server stopped")
 }

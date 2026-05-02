@@ -84,7 +84,6 @@ func (r *ToolRegistry) RegisterSearchTool() {
 		Name:         "search",
 		Description:  "搜索决策记录",
 		OutputBudget: 20000, // ≤ 2w字符
-		Handler:      r.handleSearch,
 	}
 }
 
@@ -100,20 +99,7 @@ func (r *ToolRegistry) RegisterParseTool() {
 		Name:         "parse",
 		Description:  "JSON 解析工具",
 		OutputBudget: 1000,
-		Handler:      r.handleParse,
 	}
-}
-
-// handleSearch 处理搜索请求
-func (r *ToolRegistry) handleSearch(input any) (any, error) {
-	// 实现搜索逻辑
-	return nil, nil
-}
-
-// handleParse 处理解析请求
-func (r *ToolRegistry) handleParse(input any) (any, error) {
-	// 实现解析逻辑
-	return nil, nil
 }
 
 // GetToolHint 获取工具提示
@@ -132,7 +118,6 @@ func (r *ToolRegistry) GetToolDefinition(name string) (*ToolDefinition, bool) {
 func (r *ToolRegistry) SearchTools(query string) []*ToolHint {
 	var results []*ToolHint
 	for _, hint := range r.Hints {
-		// 简单的关键词匹配
 		if containsSubstring(hint.Name, query) ||
 			containsSubstring(hint.SearchHint, query) ||
 			containsSubstring(hint.Description, query) {
