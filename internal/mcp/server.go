@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,7 +41,14 @@ type MCPServer struct {
 	in           io.Reader
 	out          io.Writer
 	mu           sync.Mutex
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+	sema         chan struct{} // 并发限制 semaphore
+	initialized  bool          // 是否已完成 initialize 握手
 }
+
+const maxConcurrency = 20
 
 // NewMCPServer 创建 MCP Server
 func NewMCPServer(
@@ -48,13 +56,17 @@ func NewMCPServer(
 	gs GitStorageInterface,
 	bs BitableStoreInterface,
 ) *MCPServer {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &MCPServer{
-		memoryGraph: mg,
-		gitStorage: gs,
+		memoryGraph:  mg,
+		gitStorage:   gs,
 		bitableStore: bs,
-		llmAgent: llm.NewMemoryAgent(),
-		in: os.Stdin,
-		out: os.Stdout,
+		llmAgent:     llm.NewMemoryAgent(),
+		in:           os.Stdin,
+		out:          os.Stdout,
+		ctx:          ctx,
+		cancel:       cancel,
+		sema:         make(chan struct{}, maxConcurrency),
 	}
 }
 
@@ -71,7 +83,12 @@ func (s *MCPServer) Start() error {
 	fmt.Fprintf(os.Stderr, "Available resources: docs://design, docs://prompts\n")
 
 	scanner := bufio.NewScanner(s.in)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB 缓冲区，支持大文本
 	for scanner.Scan() {
+		if s.ctx.Err() != nil {
+			break
+		}
+
 		line := scanner.Text()
 		if line == "" {
 			continue
@@ -79,29 +96,56 @@ func (s *MCPServer) Start() error {
 
 		var req Request
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			s.sendError(0, "parse error: "+err.Error())
+			s.sendError(nil, ErrCodeParseError, "parse error: "+err.Error())
 			continue
 		}
 
-		go s.handleRequest(req)
+		// 控制并发：获取 semaphore 槽位
+		select {
+		case s.sema <- struct{}{}:
+		case <-s.ctx.Done():
+			break
+		}
+		s.wg.Add(1)
+		go func(r Request) {
+			defer func() {
+				<-s.sema
+				s.wg.Done()
+			}()
+			s.handleRequest(r)
+		}(req)
 	}
 
+	s.wg.Wait()
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
 // Stop 停止 MCP Server
 func (s *MCPServer) Stop() error {
+	s.cancel()
 	return nil
 }
 
 func (s *MCPServer) handleRequest(req Request) {
+	// 请求日志
+	start := time.Now()
+	fmt.Fprintf(os.Stderr, "[MCP] --> %s id=%v\n", req.Method, req.ID)
+
+	// pre-initialization 检查：除 initialize 和 notifications 外拒绝所有请求
+	if !s.initialized && req.Method != "initialize" && req.Method != "notifications/initialized" {
+		s.sendError(req.ID, ErrCodeInvalidRequest, "server not initialized, call initialize first")
+		fmt.Fprintf(os.Stderr, "[MCP] <-- %s id=%v error=not_initialized duration=%v\n", req.Method, req.ID, time.Since(start))
+		return
+	}
+
 	switch req.Method {
 	case "initialize":
 		s.handleInitialize(req)
+	case "notifications/initialized":
+		// 客户端通知初始化完成，无需响应
 	case "tools/list":
 		s.handleListTools(req)
 	case "tools/call":
@@ -110,16 +154,19 @@ func (s *MCPServer) handleRequest(req Request) {
 		s.handleListResources(req)
 	case "resources/read":
 		s.handleReadResource(req)
+	case "resources/templates/list":
+		s.sendResponse(req.ID, map[string]any{"resourceTemplates": []any{}})
 	case "prompts/list":
-		s.sendResponse(req.ID, map[string]any{"prompts": []any{}})
+		s.handleListPrompts(req)
 	case "prompts/get":
-		s.sendResponse(req.ID, map[string]any{"prompt": map[string]any{}})
+		s.handleGetPrompt(req)
 	default:
-		s.sendError(req.ID, "unknown method: "+req.Method)
+		s.sendError(req.ID, ErrCodeMethodNotFound, "unknown method: "+req.Method)
 	}
 }
 
 func (s *MCPServer) handleInitialize(req Request) {
+	s.initialized = true
 	s.sendResponse(req.ID, map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities": map[string]any{
@@ -131,7 +178,7 @@ func (s *MCPServer) handleInitialize(req Request) {
 			},
 		},
 		"serverInfo": map[string]any{
-			"name": "Feishu Memory Agent",
+			"name":    "Feishu Memory Agent",
 			"version": "1.0.0",
 		},
 		"instructions": "Feishu Memory Agent 提供决策记忆管理功能，包括搜索、分类、冲突检测等",
@@ -141,7 +188,7 @@ func (s *MCPServer) handleInitialize(req Request) {
 func (s *MCPServer) handleListTools(req Request) {
 	tools := []Tool{
 		{
-			Name: "search",
+			Name:        "search",
 			Description: "搜索记忆系统中的决策记录，支持关键词、议题过滤",
 			InputSchema: map[string]any{
 				"type": "object",
@@ -153,7 +200,7 @@ func (s *MCPServer) handleListTools(req Request) {
 			},
 		},
 		{
-			Name: "topic",
+			Name:        "topic",
 			Description: "查询指定议题的所有决策记录",
 			InputSchema: map[string]any{
 				"type": "object",
@@ -164,7 +211,7 @@ func (s *MCPServer) handleListTools(req Request) {
 			},
 		},
 		{
-			Name: "decision",
+			Name:        "decision",
 			Description: "获取单个决策的详细信息",
 			InputSchema: map[string]any{
 				"type": "object",
@@ -175,44 +222,44 @@ func (s *MCPServer) handleListTools(req Request) {
 			},
 		},
 		{
-			Name: "extract_decision",
+			Name:        "extract_decision",
 			Description: "从文本内容中智能提取决策信息",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"content": map[string]any{"type": "string", "description": "待分析的文本"},
-					"topics": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "候选议题"},
+					"topics":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "候选议题"},
 				},
 				"required": []string{"content"},
 			},
 		},
 		{
-			Name: "classify_topic",
+			Name:        "classify_topic",
 			Description: "将决策智能分类到正确的议题",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"decision": map[string]any{"type": "string", "description": "决策内容"},
-					"topics": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "候选议题"},
+					"topics":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "候选议题"},
 				},
 				"required": []string{"decision", "topics"},
 			},
 		},
 		{
-			Name: "detect_crosstopic",
+			Name:        "detect_crosstopic",
 			Description: "检测决策是否会影响多个议题",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"title": map[string]any{"type": "string", "description": "决策标题"},
-					"decision": map[string]any{"type": "string", "description": "决策内容"},
+					"title":            map[string]any{"type": "string", "description": "决策标题"},
+					"decision":         map[string]any{"type": "string", "description": "决策内容"},
 					"candidate_topics": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "候选议题"},
 				},
 				"required": []string{"title", "decision", "candidate_topics"},
 			},
 		},
 		{
-			Name: "check_conflict",
+			Name:        "check_conflict",
 			Description: "评估两个决策之间是否存在冲突",
 			InputSchema: map[string]any{
 				"type": "object",
@@ -224,10 +271,10 @@ func (s *MCPServer) handleListTools(req Request) {
 			},
 		},
 		{
-			Name: "timeline",
+			Name:        "timeline",
 			Description: "获取决策历史时间线",
 			InputSchema: map[string]any{
-				"type": "object",
+				"type":       "object",
 				"properties": map[string]any{},
 			},
 		},
@@ -244,10 +291,24 @@ func (s *MCPServer) handleCallTool(req Request) {
 		params = make(map[string]any)
 	}
 
-	var content []Content
-
 	name, _ := params["name"].(string)
-	args, _ := params["arguments"].(map[string]any)
+	if name == "" {
+		s.sendError(req.ID, ErrCodeInvalidParams, "missing required parameter: name")
+		return
+	}
+
+	args, ok := params["arguments"].(map[string]any)
+	if !ok {
+		args = make(map[string]any)
+	}
+
+	// 校验必需参数
+	if err := s.validateToolArgs(name, args); err != "" {
+		s.sendError(req.ID, ErrCodeInvalidParams, err)
+		return
+	}
+
+	var content []Content
 
 	switch name {
 	case "search":
@@ -267,7 +328,8 @@ func (s *MCPServer) handleCallTool(req Request) {
 	case "timeline":
 		content = s.handleTimeline(args)
 	default:
-		content = []Content{{Type: "text", Text: "Unknown tool: " + name}}
+		s.sendError(req.ID, ErrCodeToolNotFound, "unknown tool: "+name)
+		return
 	}
 
 	s.sendResponse(req.ID, map[string]any{"content": content})
@@ -343,6 +405,84 @@ func (s *MCPServer) handleReadResource(req Request) {
 	s.sendResponse(req.ID, map[string]any{"contents": contents})
 }
 
+func (s *MCPServer) handleListPrompts(req Request) {
+	prompts := []map[string]any{
+		{
+			"name":        "extract_decision",
+			"description": "从文本内容中智能提取决策信息",
+			"arguments": []map[string]any{
+				{"name": "content", "description": "待分析的文本", "required": true},
+				{"name": "topics", "description": "候选议题列表", "required": false},
+			},
+		},
+		{
+			"name":        "classify_topic",
+			"description": "将决策智能分类到正确的议题",
+			"arguments": []map[string]any{
+				{"name": "decision", "description": "决策内容", "required": true},
+				{"name": "topics", "description": "候选议题列表", "required": true},
+			},
+		},
+		{
+			"name":        "detect_crosstopic",
+			"description": "检测决策是否会影响多个议题",
+			"arguments": []map[string]any{
+				{"name": "title", "description": "决策标题", "required": true},
+				{"name": "decision", "description": "决策内容", "required": true},
+				{"name": "candidate_topics", "description": "候选议题列表", "required": true},
+			},
+		},
+		{
+			"name":        "check_conflict",
+			"description": "评估两个决策之间是否存在冲突",
+			"arguments": []map[string]any{
+				{"name": "decision_a", "description": "新决策", "required": true},
+				{"name": "decision_b", "description": "已有决策", "required": true},
+			},
+		},
+	}
+	s.sendResponse(req.ID, map[string]any{"prompts": prompts})
+}
+
+func (s *MCPServer) handleGetPrompt(req Request) {
+	var params map[string]any
+	if p, ok := req.Params.(map[string]any); ok {
+		params = p
+	} else {
+		params = make(map[string]any)
+	}
+
+	name, _ := params["name"].(string)
+	prompts := map[string]map[string]any{
+		"extract_decision": {
+			"name":        "extract_decision",
+			"description": "从文本中提取决策信息",
+			"prompt":      "从以下文本中提取决策信息，包括决策标题、内容、建议议题、负责人等。",
+		},
+		"classify_topic": {
+			"name":        "classify_topic",
+			"description": "将决策归类到正确的议题",
+			"prompt":      "将给定的决策内容归类到最匹配的议题分类中。",
+		},
+		"detect_crosstopic": {
+			"name":        "detect_crosstopic",
+			"description": "检测跨议题影响",
+			"prompt":      "判断给定的决策是否会对其他议题产生影响，并列出受影响的议题。",
+		},
+		"check_conflict": {
+			"name":        "check_conflict",
+			"description": "评估决策冲突",
+			"prompt":      "评估两个决策之间是否存在语义矛盾，给出矛盾分数和类型。",
+		},
+	}
+
+	if prompt, ok := prompts[name]; ok {
+		s.sendResponse(req.ID, map[string]any{"prompt": prompt})
+	} else {
+		s.sendError(req.ID, ErrCodeInvalidParams, "unknown prompt: "+name)
+	}
+}
+
 func (s *MCPServer) handleSearch(args map[string]any) []Content {
 	query := getStringArg(args, "query", "")
 	topic := getStringArg(args, "topic", "")
@@ -353,11 +493,11 @@ func (s *MCPServer) handleSearch(args map[string]any) []Content {
 		decisions := s.memoryGraph.SearchByKeywords(query, topic)
 		for _, d := range decisions {
 			results = append(results, SearchResult{
-				SDRID: d.SDRID,
-				Title: d.Title,
-				Topic: d.Topic,
+				SDRID:       d.SDRID,
+				Title:       d.Title,
+				Topic:       d.Topic,
 				ImpactLevel: string(d.ImpactLevel),
-				Status: string(d.Status),
+				Status:      string(d.Status),
 			})
 			if limit > 0 && len(results) >= limit {
 				break
@@ -453,8 +593,8 @@ func (s *MCPServer) handleTimeline(args map[string]any) []Content {
 			}
 			items = append(items, TimelineItem{
 				Timestamp: ts,
-				Event: d.Title,
-				SDRID: d.SDRID,
+				Event:     d.Title,
+				SDRID:     d.SDRID,
 			})
 		}
 	}
@@ -462,30 +602,42 @@ func (s *MCPServer) handleTimeline(args map[string]any) []Content {
 	return []Content{{Type: "text", Text: text}}
 }
 
-func (s *MCPServer) sendResponse(id int, result any) {
+func (s *MCPServer) sendResponse(id any, result any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	resp := Response{
 		JSONRPC: "2.0",
-		ID: id,
-		Result: result,
+		ID:      id,
+		Result:  result,
 	}
-	data, _ := json.Marshal(resp)
+	data, err := json.Marshal(resp)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[MCP] sendResponse marshal error: %v\n", err)
+		fmt.Fprintf(s.out, `{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"internal error"}}`+"\n")
+		return
+	}
 	fmt.Fprintf(s.out, "%s\n", data)
+	fmt.Fprintf(os.Stderr, "[MCP] <-- response id=%v size=%d\n", id, len(data))
 }
 
-func (s *MCPServer) sendError(id int, errMsg string) {
+func (s *MCPServer) sendError(id any, code int, errMsg string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	resp := Response{
 		JSONRPC: "2.0",
-		ID: id,
-		Error: &Error{Code: -32000, Message: errMsg},
+		ID:      id,
+		Error:   &Error{Code: code, Message: errMsg},
 	}
-	data, _ := json.Marshal(resp)
+	data, err := json.Marshal(resp)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[MCP] sendError marshal error: %v\n", err)
+		fmt.Fprintf(s.out, `{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"internal error"}}`+"\n")
+		return
+	}
 	fmt.Fprintf(s.out, "%s\n", data)
+	fmt.Fprintf(os.Stderr, "[MCP] <-- error id=%v code=%d message=%q\n", id, code, errMsg)
 }
 
 func getStringArg(args map[string]any, key, defaultValue string) string {
@@ -498,7 +650,11 @@ func getStringArg(args map[string]any, key, defaultValue string) string {
 }
 
 func getNumberArg(args map[string]any, key string, defaultValue float64) float64 {
-	if val, ok := args[key]; ok {if num, ok := val.(float64); ok {return num}}
+	if val, ok := args[key]; ok {
+		if num, ok := val.(float64); ok {
+			return num
+		}
+	}
 	return defaultValue
 }
 
@@ -507,7 +663,9 @@ func getStringArrayArg(args map[string]any, key string) []string {
 		if arr, ok := val.([]any); ok {
 			var result []string
 			for _, item := range arr {
-				if str, ok := item.(string); ok {result = append(result, str)}
+				if str, ok := item.(string); ok {
+					result = append(result, str)
+				}
 			}
 			return result
 		}
@@ -516,7 +674,9 @@ func getStringArrayArg(args map[string]any, key string) []string {
 }
 
 func formatSearchResults(results []SearchResult) string {
-	if len(results) == 0 {return "未找到匹配的决策记录"}
+	if len(results) == 0 {
+		return "未找到匹配的决策记录"
+	}
 	text := "## 搜索结果\n\n"
 	for _, r := range results {
 		text += fmt.Sprintf("- [%s] %s (%s) - %s\n", r.Status, r.Title, r.SDRID, r.Topic)
@@ -534,7 +694,9 @@ func formatTopicResults(topic string, decisions []*decision.DecisionNode) string
 }
 
 func formatDecisionResult(d *decision.DecisionNode, found bool) string {
-	if !found || d == nil {return "未找到指定的决策"}
+	if !found || d == nil {
+		return "未找到指定的决策"
+	}
 	text := fmt.Sprintf("## %s\n\n", d.Title)
 	text += fmt.Sprintf("- **SDR ID**: %s\n", d.SDRID)
 	text += fmt.Sprintf("- **议题**: %s\n", d.Topic)
@@ -544,7 +706,9 @@ func formatDecisionResult(d *decision.DecisionNode, found bool) string {
 }
 
 func formatExtractResult(result *llm.ExtractionResult) string {
-	if !result.HasDecision {return "未检测到决策信息"}
+	if !result.HasDecision {
+		return "未检测到决策信息"
+	}
 	text := "## 决策提取结果\n\n"
 	text += fmt.Sprintf("- **置信度**: %.2f\n", result.Confidence)
 	if result.Decision != nil {
@@ -596,30 +760,85 @@ func formatTimelineResults(items []TimelineItem) string {
 	return text
 }
 
+// validateToolArgs 校验工具必需参数
+func (s *MCPServer) validateToolArgs(name string, args map[string]any) string {
+	switch name {
+	case "topic":
+		if _, ok := args["topic"]; !ok {
+			return "missing required parameter: topic"
+		}
+	case "decision":
+		if _, ok := args["sdr_id"]; !ok {
+			return "missing required parameter: sdr_id"
+		}
+	case "extract_decision":
+		if _, ok := args["content"]; !ok {
+			return "missing required parameter: content"
+		}
+	case "classify_topic":
+		if _, ok := args["decision"]; !ok {
+			return "missing required parameter: decision"
+		}
+		if _, ok := args["topics"]; !ok {
+			return "missing required parameter: topics"
+		}
+	case "detect_crosstopic":
+		if _, ok := args["title"]; !ok {
+			return "missing required parameter: title"
+		}
+		if _, ok := args["decision"]; !ok {
+			return "missing required parameter: decision"
+		}
+		if _, ok := args["candidate_topics"]; !ok {
+			return "missing required parameter: candidate_topics"
+		}
+	case "check_conflict":
+		if _, ok := args["decision_a"]; !ok {
+			return "missing required parameter: decision_a"
+		}
+		if _, ok := args["decision_b"]; !ok {
+			return "missing required parameter: decision_b"
+		}
+	}
+	return ""
+}
+
 // ===== 类型定义 =====
+
+// MCP 标准错误码
+const (
+	ErrCodeParseError       = -32700
+	ErrCodeInvalidRequest   = -32600
+	ErrCodeMethodNotFound   = -32601
+	ErrCodeInvalidParams    = -32602
+	ErrCodeInternalError    = -32603
+	ErrCodeToolNotFound     = -32003
+	ErrCodeResourceNotFound = -32002
+)
 
 type Request struct {
 	JSONRPC string `json:"jsonrpc"`
-	ID int `json:"id"`
-	Method string `json:"method"`
-	Params any `json:"params,omitempty"`
+	ID      any    `json:"id"`
+	Method  string `json:"method"`
+	Params  any    `json:"params,omitempty"`
 }
 
 type Response struct {
 	JSONRPC string `json:"jsonrpc"`
-	ID int `json:"id"`
-	Result any `json:"result,omitempty"`
-	Error *Error `json:"error,omitempty"`
+	ID      any    `json:"id"`
+	Result  any    `json:"result,omitempty"`
+	Error   *Error `json:"error,omitempty"`
 }
 
 type Error struct {
-	Code int `json:"code"`
+	Code    int    `json:"code"`
 	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 type Tool struct {
-	Name string `json:"name"`
-	Description string `json:"description"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 }
 
@@ -629,27 +848,27 @@ type Content struct {
 }
 
 type Resource struct {
-	URI string `json:"uri"`
-	Name string `json:"name"`
+	URI      string `json:"uri"`
+	Name     string `json:"name"`
 	MimeType string `json:"mimeType"`
 }
 
 type ResourceContent struct {
-	URI string `json:"uri"`
+	URI      string `json:"uri"`
 	MimeType string `json:"mimeType"`
-	Text string `json:"text"`
+	Text     string `json:"text"`
 }
 
 type SearchResult struct {
-	SDRID string `json:"sdr_id"`
-	Title string `json:"title"`
-	Topic string `json:"topic"`
+	SDRID       string `json:"sdr_id"`
+	Title       string `json:"title"`
+	Topic       string `json:"topic"`
 	ImpactLevel string `json:"impact_level"`
-	Status string `json:"status"`
+	Status      string `json:"status"`
 }
 
 type TimelineItem struct {
 	Timestamp time.Time `json:"timestamp"`
-	Event string `json:"event"`
-	SDRID string `json:"sdr_id"`
+	Event     string    `json:"event"`
+	SDRID     string    `json:"sdr_id"`
 }

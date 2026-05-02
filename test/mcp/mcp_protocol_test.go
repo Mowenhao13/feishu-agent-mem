@@ -2,6 +2,7 @@ package mcp_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -102,7 +103,7 @@ func Test_03_ToolCallRequest(t *testing.T) {
 			toolName: "extract_decision",
 			arguments: map[string]any{
 				"content": "我们决定使用 PostgreSQL 作为主数据库，张三负责实施。",
-				"topics": []any{"数据库架构", "缓存架构"},
+				"topics":  []any{"数据库架构", "缓存架构"},
 			},
 		},
 		{
@@ -110,7 +111,7 @@ func Test_03_ToolCallRequest(t *testing.T) {
 			toolName: "classify_topic",
 			arguments: map[string]any{
 				"decision": "使用 Redis 作为缓存",
-				"topics": []any{"数据库架构", "缓存架构", "前端框架"},
+				"topics":   []any{"数据库架构", "缓存架构", "前端框架"},
 			},
 		},
 		{
@@ -131,8 +132,8 @@ func Test_03_ToolCallRequest(t *testing.T) {
 			},
 		},
 		{
-			name:     "timeline 工具",
-			toolName: "timeline",
+			name:      "timeline 工具",
+			toolName:  "timeline",
 			arguments: map[string]any{},
 		},
 	}
@@ -382,10 +383,10 @@ func Test_10_RealLLM_DetectCrossTopic(t *testing.T) {
 	assert.NotNil(t, llmAgent)
 
 	testData := map[string]any{
-		"title":          "用户表字段变更",
-		"decision":       "将 user_profile 表的 session_token 字段从 256 字节扩展到 512 字节",
-		"rationale":      "新的 JWT 格式需要更长的 token 字段",
-		"impact_level":   "major",
+		"title":            "用户表字段变更",
+		"decision":         "将 user_profile 表的 session_token 字段从 256 字节扩展到 512 字节",
+		"rationale":        "新的 JWT 格式需要更长的 token 字段",
+		"impact_level":     "major",
 		"candidate_topics": []any{"数据库架构", "用户认证", "API网关", "前端框架"},
 	}
 
@@ -519,16 +520,11 @@ func Test_12_RealLLM_EndToEnd(t *testing.T) {
 func Test_13_MCPToLarkPush(t *testing.T) {
 	t.Log("=== 测试13: MCP-server 给飞书客户端推送消息 ===")
 
-	// 加载 .env 文件
-	_ = godotenv.Load("../../.env")
-
-	// 检查 CLAW_* 配置
-	cfg := larkadapter.LoadConfigWithPrefix("CLAW_")
-	if !cfg.IsConfigured() {
-		t.Skip("CLAW_APP_ID 或 CLAW_APP_SECRET 未设置，跳过飞书消息推送测试")
-	}
-	if len(cfg.ChatIDs) == 0 {
-		t.Skip("CLAW_CHAT_IDS 未设置，跳过飞书消息推送测试")
+	// 硬编码配置（直连飞书，不依赖 .env）
+	cfg := &larkadapter.Config{
+		AppID:     "cli_a97e7751f9389cc3",
+		AppSecret: "B8j5WRBbkJMdf6DBg7kfXbQIhujEYtka",
+		ChatIDs:   []string{"oc_1a243c33320b6e230f90c1a637e0e0a2"},
 	}
 
 	t.Logf("CLAW_APP_ID: %s\n", maskString(cfg.AppID))
@@ -537,14 +533,15 @@ func Test_13_MCPToLarkPush(t *testing.T) {
 	// 创建消息发送器
 	sender := larkadapter.NewIMSender(cfg)
 
-	// 准备三条消息
+	// 准备三条消息（每条带时间戳+随机数，防止飞书去重）
+	runID := fmt.Sprintf("%d", time.Now().UnixNano())
 	messages := []struct {
 		index int
 		text  string
 	}{
-		{1, "【MCP测试消息 1/3】这是来自 MCP-server 的第一条测试消息，时间: " + timeNowString()},
-		{2, "【MCP测试消息 2/3】这是来自 MCP-server 的第二条测试消息，确认推送通道正常工作"},
-		{3, "【MCP测试消息 3/3】这是来自 MCP-server 的第三条测试消息，测试完成！"},
+		{1, fmt.Sprintf("【MCP测试 1/3】【%s】第一条测试消息", runID)},
+		{2, fmt.Sprintf("【MCP测试 2/3】【%s】第二条测试消息，确认推送通道正常工作", runID)},
+		{3, fmt.Sprintf("【MCP测试 3/3】【%s】第三条测试消息，测试完成！", runID)},
 	}
 
 	// 发送消息
@@ -618,4 +615,3 @@ func maskString(s string) string {
 func timeNowString() string {
 	return time.Now().Format("2006-01-02 15:04:05")
 }
-
